@@ -1,6 +1,7 @@
 import javax.swing.*;
 import java.awt.event.*;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Point2D;
 import java.awt.*;
 import java.util.HashSet;
 import java.util.Random;
@@ -13,7 +14,7 @@ public class GamePanel extends JPanel implements ActionListener
     static final int SCREEN_SIZE = 800;
     static final int UNIT_SIZE = (int)(SCREEN_SIZE / MAP.size);
     static final int RESOLUTION = 100;
-    static final int FOV = 70;
+    static final int FOV = 90;
     static final int DELAY = 10;
     static final int PLAYER_SIZE = UNIT_SIZE / 2;
     static final int MOVE_STEP = 4; // Pixels
@@ -38,11 +39,11 @@ public class GamePanel extends JPanel implements ActionListener
         this.setPreferredSize(new Dimension(SCREEN_SIZE, SCREEN_SIZE));
         this.setBackground(Color.BLACK);
         this.setFocusable(true);
-        this.addKeyListener(new MyKeyAdapter());
+        this.addKeyListener(new Controller());
 
         startGame();
     }
-
+    
     public void startGame()
     {
         running = true;
@@ -59,9 +60,7 @@ public class GamePanel extends JPanel implements ActionListener
 
         if (threeD)
         {
-            //draw2d(g, g2d);
-            draw(g);
-            
+            draw(g, g2d);
         }
         else
         {
@@ -141,10 +140,23 @@ public class GamePanel extends JPanel implements ActionListener
         }
     }
 
-    public void draw(Graphics g)
+    public void draw(Graphics g, Graphics2D g2d)
     {
         if (running)
         {
+            // Ceiling Shading effect
+
+            GradientPaint gpTop = new GradientPaint(new Point2D.Float(SCREEN_SIZE / 2, 0), Color.DARK_GRAY, new Point2D.Float((float) SCREEN_SIZE / 2, (float) SCREEN_SIZE / 2), Color.BLACK);
+            GradientPaint gpBottom = new GradientPaint(new Point2D.Float(SCREEN_SIZE / 2, SCREEN_SIZE), Color.DARK_GRAY, new Point2D.Float((float) SCREEN_SIZE / 2, (float) SCREEN_SIZE / 2), Color.BLACK);
+            
+            g2d.setPaint(gpTop);
+            g2d.fillRect(0, 0, SCREEN_SIZE, SCREEN_SIZE / 2);
+
+            g2d.setPaint(gpBottom);
+            g2d.fillRect(0, SCREEN_SIZE / 2, SCREEN_SIZE, SCREEN_SIZE / 2);
+
+            // Wall rendering
+
             for (int i = 0; i < RESOLUTION; i++)
             {
                 double relativeAngle = playerOrientation - FOV / 2 + ((double)FOV / RESOLUTION * i);
@@ -152,12 +164,13 @@ public class GamePanel extends JPanel implements ActionListener
                 
                 if (position != null)
                 {
-                    double distance = Math.clamp(Math.sqrt(Math.pow(playerX - position[0], 2) + Math.pow(playerY - position[1], 2)), 0, RAYCAST_DISTANCE);
-                    double adjacent = Math.cos(Math.toRadians(relativeAngle - playerOrientation)) * distance;
-                    double distanceFactor = 1 - Math.clamp(adjacent / RAYCAST_DISTANCE, 0, 1);
+                    double distance = Math.sqrt(Math.pow(playerX + PLAYER_SIZE / 2 - position[0], 2) + Math.pow(playerY + PLAYER_SIZE / 2 - position[1], 2));
+                    double lensCorrectedDistance = distance * Math.cos(Math.toRadians(relativeAngle - playerOrientation));
+                    double height = Math.min(20000 / distance, SCREEN_SIZE);
+                    double lensCorrectedHeight = Math.min(20000 * Math.cos(Math.toRadians(relativeAngle - playerOrientation)) / lensCorrectedDistance - (20000 / RAYCAST_DISTANCE), SCREEN_SIZE);
     
-                    g.setColor(Color.getHSBColor(0, 0, (float)distanceFactor));
-                    g.fillRect(SCREEN_SIZE / RESOLUTION * i, (int)((SCREEN_SIZE - (distanceFactor * SCREEN_SIZE)) / 2), SCREEN_SIZE / (RESOLUTION), (int)(distanceFactor * SCREEN_SIZE));
+                    g.setColor(Color.getHSBColor(0, 0, (float)(height / SCREEN_SIZE)));
+                    g.fillRect(SCREEN_SIZE / RESOLUTION * i, (int)((SCREEN_SIZE - lensCorrectedHeight) / 2), SCREEN_SIZE / (RESOLUTION), (int)(lensCorrectedHeight));
                 }
             }
         }
@@ -202,7 +215,7 @@ public class GamePanel extends JPanel implements ActionListener
         repaint();
     }
 
-    public class MyKeyAdapter extends KeyAdapter
+    public class Controller extends KeyAdapter
     {
         @Override
         public void keyPressed(KeyEvent event)
